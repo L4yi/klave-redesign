@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@layer base {
+  :root,
+  [data-theme="dark"] {
+    --bg-canvas: #06070a;
+    --bg-surface: #0c0e14;
+    --bg-elevated: #12151e;
+    --bg-glass: rgba(10, 12, 18, 0.92);
+    --bg-hover: rgba(37, 99, 235, 0.06);
+    --border-subtle: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(59, 130, 246, 0.32);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #526077;
+    --accent-primary: #2563eb;
+    --accent-bright: #3b82f6;
+    --accent-ice: #60a5fa;
+    --accent-soft: rgba(37, 99, 235, 0.12);
+    --verified: #60a5fa;
+    --verified-soft: rgba(37, 99, 235, 0.1);
+    --danger: #f87171;
+    color-scheme: dark;
+  }
+
+  [data-theme="light"] {
+    --bg-canvas: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-elevated: #f1f5f9;
+    --bg-glass: rgba(255, 255, 255, 0.94);
+    --bg-hover: rgba(37, 99, 235, 0.04);
+    --border-subtle: rgba(15, 23, 42, 0.08);
+    --border-strong: rgba(37, 99, 235, 0.28);
+    --text-primary: #090d16;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --accent-primary: #1d4ed8;
+    --accent-bright: #2563eb;
+    --accent-ice: #1d4ed8;
+    --accent-soft: rgba(29, 78, 216, 0.08);
+    --verified: #1d4ed8;
+    --verified-soft: rgba(29, 78, 216, 0.08);
+    --danger: #dc2626;
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  .font-display {
+    font-family: "Syne", "Plus Jakarta Sans", sans-serif;
+    letter-spacing: -0.025em;
+  }
+
+  .font-mono-tech {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
