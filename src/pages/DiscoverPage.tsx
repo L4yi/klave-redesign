@@ -29,6 +29,7 @@ const STEM_CHANNELS: { id: StemChannel; label: string }[] = [
 
 export const DiscoverPage: React.FC = () => {
   const {
+    beats,
     currentBeat,
     isPlaying,
     activeStems,
@@ -47,7 +48,7 @@ export const DiscoverPage: React.FC = () => {
   const [activeMood, setActiveMood] = useState<'All' | MoodTag>('All');
 
   // Trending Now spotlight beat (defaults to #1 trending beat, or updates when user plays a beat)
-  const trendingBeat = BEATS[0];
+  const trendingBeat = beats[0] || BEATS[0];
   const activeDeckBeat = currentBeat ?? trendingBeat;
   const isTrendingPlaying = currentBeat?.id === activeDeckBeat.id && isPlaying;
   const deckCover = useMemo(
@@ -57,19 +58,19 @@ export const DiscoverPage: React.FC = () => {
 
   // Producer of the Week: Northhh (#2 in roster, 6 beats, 27.9k plays)
   const producerOfWeek = PRODUCERS[1];
-  const powBeat = BEATS.find((b) => b.id === producerOfWeek.featuredBeatId) ?? BEATS[1];
+  const powBeat = beats.find((b) => b.id === producerOfWeek.featuredBeatId) ?? beats[1] ?? BEATS[1];
   const isPowPlaying = currentBeat?.id === powBeat.id && isPlaying;
   const isFollowingPow = followedProducers.includes(producerOfWeek.id);
 
   const filteredBeats = useMemo(() => {
-    return BEATS.filter((b) => {
+    return beats.filter((b) => {
       if (selectedGenre !== 'All' && b.genre !== selectedGenre) return false;
       if (activeMood !== 'All' && !b.moods.includes(activeMood)) return false;
       return true;
     });
-  }, [selectedGenre, activeMood]);
+  }, [selectedGenre, activeMood, beats]);
 
-  const newReleases = useMemo(() => BEATS.slice(0, 4), []);
+  const newReleases = useMemo(() => beats.slice(0, 4), [beats]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-10 px-4 pt-5 sm:px-6">

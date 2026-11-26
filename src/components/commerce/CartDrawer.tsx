@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
-import { CheckCircle2, CreditCard, Landmark, ShoppingBag, Trash2, X } from 'lucide-react';
+import {
+  CheckCircle2,
+  CreditCard,
+  Landmark,
+  ShoppingBag,
+  Trash2,
+  X,
+  Loader2,
+  AlertTriangle,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { BEATS } from '../../data/catalog';
 import { generateCoverDataUri } from '../../utils/artwork';
 import { formatPrice } from '../../utils/format';
+import { initiatePaystackPayment } from '../../utils/paystack';
 
 export const CartDrawer: React.FC = () => {
   const {
@@ -18,18 +27,70 @@ export const CartDrawer: React.FC = () => {
     setCurrency,
     completeCheckout,
     navigate,
+    beats,
+    currentUser,
+    openAuthModal,
+    showToast,
   } = useApp();
 
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'paystack'>(
     currency === 'NGN' ? 'paystack' : 'card'
   );
   const [checkedOut, setCheckedOut] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
   if (!cartOpen) return null;
 
-  const handleCheckout = () => {
-    completeCheckout();
-    setCheckedOut(true);
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+
+    if (!currentUser) {
+      showToast('Please sign in to complete checkout and secure license records', 'info');
+      openAuthModal('signin');
+      return;
+    }
+
+    if (paymentMethod === 'paystack') {
+      const firstItem = cart[0];
+      const beat = beats.find((b) => b.id === firstItem.beatId);
+      if (!beat) return;
+
+      const approxNaira = Math.round(cartTotalUsd * 1550); // Live or fallback USD->NGN
+      const tierType = firstItem.tierId === 'exclusive' ? 'exclusive' : 'standard';
+
+      setProcessing(true);
+      try {
+        await initiatePaystackPayment({
+          email: currentUser.email || 'customer@klave.app',
+          amountNaira: approxNaira,
+          beatId: beat.id,
+          buyerId: currentUser.uid,
+          tier: tierType,
+          onSuccess: (res) => {
+            setProcessing(false);
+            completeCheckout();
+            setCheckedOut(true);
+            showToast(`Payment verified! Reference: ${res.reference}`, 'success');
+          },
+          onClose: () => {
+            setProcessing(false);
+            showToast('Checkout cancelled', 'info');
+          },
+          onError: (err) => {
+            setProcessing(false);
+            showToast(err.message || 'Payment verification failed', 'info');
+          },
+        });
+      } catch (err: unknown) {
+        setProcessing(false);
+        const e = err as { message?: string };
+        showToast(e.message || 'Unable to initialize checkout', 'info');
+      }
+    } else {
+      // Standard card checkout flow
+      completeCheckout();
+      setCheckedOut(true);
+    }
   };
 
   const handleClose = () => {
@@ -76,14 +137,13 @@ export const CartDrawer: React.FC = () => {
             <div className="flex h-full flex-col items-center justify-center text-center">
               <div
                 className="mb-4 flex h-14 w-14 items-center justify-center rounded-full"
-                style={{ backgroundColor: 'var(--verified-soft)', color: 'var(--verified)' }}
+                style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent-ice)' }}
               >
                 <CheckCircle2 className="h-8 w-8" />
               </div>
               <h3 className="text-lg font-bold">Licenses Unlocked</h3>
               <p className="mt-2 max-w-xs text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Your untagged masters, PDF license agreements, and stem archives are ready in your
-                Profile library.
+                Your master audio, PDF agreements, and stem archives are stored in your Profile library.
               </p>
               <button
                 type="button"
@@ -109,7 +169,7 @@ export const CartDrawer: React.FC = () => {
           ) : (
             <div className="space-y-3">
               {cart.map((item) => {
-                const beat = BEATS.find((b) => b.id === item.beatId);
+                const beat = beats.find((b) => b.id === item.beatId);
                 if (!beat) return null;
                 const tier = beat.licenses[item.tierId];
                 const cover = generateCoverDataUri(beat.coverSeed, beat.palette, `${beat.bpm}`);
@@ -147,7 +207,7 @@ export const CartDrawer: React.FC = () => {
                 );
               })}
 
-              {/* Payment method preview */}
+              {/* Payment Rail Selector */}
               <div className="pt-4">
                 <span className="block font-mono-tech text-xs uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                   Payment Rail
@@ -160,10 +220,11 @@ export const CartDrawer: React.FC = () => {
                     style={{
                       backgroundColor: paymentMethod === 'card' ? 'var(--accent-soft)' : 'var(--bg-elevated)',
                       borderColor: paymentMethod === 'card' ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                      color: paymentMethod === 'card' ? 'var(--accent-ice)' : 'var(--text-secondary)',
                     }}
                   >
                     <CreditCard className="h-4 w-4" />
-                    Card / Apple Pay
+                    Simulated / Card
                   </button>
                   <button
                     type="button"
@@ -172,12 +233,25 @@ export const CartDrawer: React.FC = () => {
                     style={{
                       backgroundColor: paymentMethod === 'paystack' ? 'var(--accent-soft)' : 'var(--bg-elevated)',
                       borderColor: paymentMethod === 'paystack' ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                      color: paymentMethod === 'paystack' ? 'var(--accent-ice)' : 'var(--text-secondary)',
                     }}
                   >
                     <Landmark className="h-4 w-4" />
-                    Paystack / Naira
+                    Paystack / NGN
                   </button>
                 </div>
+
+                {paymentMethod === 'paystack' && (
+                  <div
+                    className="mt-3 flex items-start gap-2 rounded-md border p-2.5 text-[11px]"
+                    style={{ backgroundColor: 'var(--accent-soft)', borderColor: 'var(--border-strong)', color: 'var(--text-secondary)' }}
+                  >
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                    <span>
+                      Paystack is configured with live keys. Test charges verify server-side in <code>/api/verify-payment</code>.
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -195,7 +269,7 @@ export const CartDrawer: React.FC = () => {
                 <span className="font-mono-tech">{formatPrice(cartSubtotalUsd, currency)}</span>
               </div>
               {bundleDiscountUsd > 0 && (
-                <div className="flex justify-between font-medium" style={{ color: 'var(--verified)' }}>
+                <div className="flex justify-between font-medium" style={{ color: 'var(--accent-ice)' }}>
                   <span>Multi-Beat Bundle (15% off)</span>
                   <span className="font-mono-tech">-{formatPrice(bundleDiscountUsd, currency)}</span>
                 </div>
@@ -208,11 +282,19 @@ export const CartDrawer: React.FC = () => {
 
             <button
               type="button"
+              disabled={processing}
               onClick={handleCheckout}
-              className="w-full cursor-pointer rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-95"
+              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-50"
               style={{ backgroundColor: 'var(--accent-primary)' }}
             >
-              Complete Checkout · {formatPrice(cartTotalUsd, currency)}
+              {processing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Connecting to Paystack...</span>
+                </>
+              ) : (
+                `Complete Checkout · ${formatPrice(cartTotalUsd, currency)}`
+              )}
             </button>
           </div>
         )}

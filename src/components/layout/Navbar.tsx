@@ -15,7 +15,9 @@ export const Navbar: React.FC = () => {
     setCartOpen,
     setNeroOpen,
     setTrustModalOpen,
-    role,
+    currentUser,
+    userProfile,
+    openAuthModal,
     searchQuery,
     setSearchQuery,
   } = useApp();
@@ -159,20 +161,37 @@ export const Navbar: React.FC = () => {
             <span>{cart.length}</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => navigate('profile')}
-            aria-label="Open profile"
-            className="hidden h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition md:inline-flex"
-            style={{
-              backgroundColor: view === 'profile' ? 'var(--accent-soft)' : 'var(--bg-surface)',
-              borderColor: view === 'profile' ? 'var(--border-strong)' : 'var(--border-subtle)',
-              color: 'var(--text-primary)',
-            }}
-          >
-            <User className="h-3.5 w-3.5" />
-            <span className="capitalize">{role === 'guest' ? 'Sign in' : role}</span>
-          </button>
+          {currentUser ? (
+            <button
+              type="button"
+              onClick={() => navigate('profile')}
+              aria-label="Open profile"
+              className="hidden h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition md:inline-flex"
+              style={{
+                backgroundColor: view === 'profile' ? 'var(--accent-soft)' : 'var(--bg-surface)',
+                borderColor: view === 'profile' ? 'var(--border-strong)' : 'var(--border-subtle)',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <User className="h-3.5 w-3.5 text-blue-400" />
+              <span className="max-w-[90px] truncate">
+                {userProfile?.displayName || currentUser.displayName || currentUser.email?.split('@')[0] || 'Profile'}
+              </span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openAuthModal('signin')}
+              className="hidden h-8 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-xs font-semibold text-white transition md:inline-flex"
+              style={{
+                backgroundColor: 'var(--accent-primary)',
+                borderColor: 'var(--accent-bright)',
+              }}
+            >
+              <User className="h-3.5 w-3.5" />
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

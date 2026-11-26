@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { BEATS, PRODUCERS } from '../data/catalog';
+import { BEATS as CATALOG_BEATS, PRODUCERS } from '../data/catalog';
 import {
   AppView,
   Beat,
@@ -9,9 +9,23 @@ import {
   MoodTag,
   Producer,
   PurchasedLicense,
+  UserProfile,
   UserRole,
 } from '../types/klave';
 import { audioEngine, StemChannel } from '../utils/audioSynth';
+import {
+  auth,
+  db,
+  onAuthStateChanged,
+  signOut,
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  User,
+} from '../lib/firebase';
+import { transformFirestoreBeat, RawFirestoreBeat } from '../utils/beatAdapter';
+import { AuthModal } from '../components/modals/AuthModal';
 
 interface ToastState {
   id: number;
@@ -35,12 +49,25 @@ interface AppContextValue {
   reduceMotion: boolean;
   setReduceMotion: (v: boolean) => void;
 
+  // Real Auth + Role
+  currentUser: User | null;
+  userProfile: UserProfile | null;
   role: UserRole;
   setRole: (role: UserRole) => void;
+  authModalOpen: boolean;
+  authModalMode: 'signin' | 'signup';
+  openAuthModal: (mode?: 'signin' | 'signup') => void;
+  closeAuthModal: () => void;
+  signOutUser: () => Promise<void>;
+
   followedProducers: string[];
   toggleFollowProducer: (producerId: string) => void;
   savedBeatIds: string[];
   toggleSaveBeat: (beatId: string) => void;
+
+  // Catalog Beats (Firestore + Curated)
+  beats: Beat[];
+  refreshBeats: () => Promise<void>;
 
   currentBeat: Beat | null;
   isPlaying: boolean;
@@ -125,7 +152,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [compactMode, setCompactMode] = useState<boolean>(initial.compactMode ?? false);
   const [reduceMotion, setReduceMotion] = useState<boolean>(initial.reduceMotion ?? false);
 
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [role, setRole] = useState<UserRole>(initial.role ?? 'artist');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
+
+  // Beats Catalog State
+  const [beats, setBeats] = useState<Beat[]>(CATALOG_BEATS);
+
   const [followedProducers, setFollowedProducers] = useState<string[]>(
     initial.followedProducers ?? ['soundsbykannon', 'northhh']
   );
@@ -133,7 +169,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     initial.savedBeatIds ?? ['you-gettt', 'save-me']
   );
 
-  const [currentBeat, setCurrentBeat] = useState<Beat | null>(BEATS[0]);
+  const [currentBeat, setCurrentBeat] = useState<Beat | null>(CATALOG_BEATS[0]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [volume, setVolumeState] = useState<number>(0.75);
@@ -155,6 +191,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     initial.purchasedLicenses ?? []
   );
   const [toast, setToast] = useState<ToastState | null>(null);
+
+  // 1. Listen to Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        try {
+          const userDocSnap = await getDoc(doc(db, 'users', user.uid));
+          if (userDocSnap.exists()) {
+            const data = userDocSnap.data() as Partial<UserProfile>;
+            const profile: UserProfile = {
+              uid: user.uid,
+              email: user.email,
+              displayName: data.displayName || user.displayName || 'Producer',
+              photoURL: data.photoURL || user.photoURL,
+              role: (data.role as 'producer' | 'artist') || 'artist',
+              tier: data.tier || 'free',
+              admin: data.admin ?? false,
+              referredBy: data.referredBy,
+              referralCount: data.referralCount || 0,
+              referralEarnings: data.referralEarnings || 0,
+            };
+            setUserProfile(profile);
+            setRole(profile.role);
+          } else {
+            setUserProfile({
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName || 'Producer',
+              photoURL: user.photoURL,
+              role: 'artist',
+              tier: 'free',
+            });
+          }
+        } catch (e) {
+          console.warn('Could not load user profile doc from firestore', e);
+        }
+      } else {
+        setUserProfile(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Fetch live beats from Firestore
+  const refreshBeats = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'beats'));
+      if (!snap.empty) {
+        const firestoreBeats: Beat[] = snap.docs.map((d) =>
+          transformFirestoreBeat(d.data() as RawFirestoreBeat, d.id)
+        );
+        // Merge with catalog beats, avoiding duplicate IDs
+        const existingIds = new Set(firestoreBeats.map((b) => b.id));
+        const filteredCatalog = CATALOG_BEATS.filter((b) => !existingIds.has(b.id));
+        setBeats([...firestoreBeats, ...filteredCatalog]);
+      }
+    } catch (e) {
+      console.warn('Firestore beats load fallback to static catalog', e);
+    }
+  };
+
+  useEffect(() => {
+    refreshBeats();
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -211,6 +313,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 3000);
   };
 
+  const openAuthModal = (mode: 'signin' | 'signup' = 'signin') => {
+    setAuthModalMode(mode);
+    setAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setAuthModalOpen(false);
+  };
+
+  const signOutUser = async () => {
+    await signOut(auth);
+    setUserProfile(null);
+    setCurrentUser(null);
+    setRole('guest');
+    showToast('Signed out of KLAVE', 'info');
+  };
+
   const navigate = (nextView: AppView, producerId?: string) => {
     if (producerId) {
       setSelectedProducerId(producerId);
@@ -253,7 +372,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const togglePlay = () => {
     if (!currentBeat) {
-      playBeat(BEATS[0]);
+      playBeat(beats[0] || CATALOG_BEATS[0]);
       return;
     }
     if (isPlaying) {
@@ -280,26 +399,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const nextBeat = () => {
     if (!currentBeat) {
-      playBeat(BEATS[0]);
+      playBeat(beats[0] || CATALOG_BEATS[0]);
       return;
     }
-    const idx = BEATS.findIndex((b) => b.id === currentBeat.id);
-    const next = BEATS[(idx + 1) % BEATS.length];
+    const idx = beats.findIndex((b) => b.id === currentBeat.id);
+    const next = beats[(idx + 1) % beats.length];
     playBeat(next);
   };
 
   const prevBeat = () => {
     if (!currentBeat) {
-      playBeat(BEATS[0]);
+      playBeat(beats[0] || CATALOG_BEATS[0]);
       return;
     }
-    const idx = BEATS.findIndex((b) => b.id === currentBeat.id);
-    const prev = BEATS[(idx - 1 + BEATS.length) % BEATS.length];
+    const idx = beats.findIndex((b) => b.id === currentBeat.id);
+    const prev = beats[(idx - 1 + beats.length) % beats.length];
     playBeat(prev);
   };
 
   const addToCart = (beatId: string, tierId: LicenseTierId) => {
-    const beat = BEATS.find((b) => b.id === beatId);
+    const beat = beats.find((b) => b.id === beatId);
     if (!beat) return;
     setCart((prev) => {
       const existing = prev.find((item) => item.beatId === beatId);
@@ -319,10 +438,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const cartSubtotalUsd = useMemo(() => {
     return cart.reduce((sum, item) => {
-      const beat = BEATS.find((b) => b.id === item.beatId);
+      const beat = beats.find((b) => b.id === item.beatId);
       return sum + (beat ? beat.licenses[item.tierId].priceUsd : 0);
     }, 0);
-  }, [cart]);
+  }, [cart, beats]);
 
   const bundleDiscountUsd = useMemo(() => {
     return cart.length >= 2 ? Math.round(cartSubtotalUsd * 0.15) : 0;
@@ -339,7 +458,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     const newLicenses: PurchasedLicense[] = cart
       .map((item) => {
-        const beat = BEATS.find((b) => b.id === item.beatId);
+        const beat = beats.find((b) => b.id === item.beatId);
         if (!beat) return null;
         return {
           id: `${beat.id}-${Date.now()}`,
@@ -391,12 +510,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCompactMode,
         reduceMotion,
         setReduceMotion,
+
+        currentUser,
+        userProfile,
         role,
         setRole,
+        authModalOpen,
+        authModalMode,
+        openAuthModal,
+        closeAuthModal,
+        signOutUser,
+
         followedProducers,
         toggleFollowProducer,
         savedBeatIds,
         toggleSaveBeat,
+
+        beats,
+        refreshBeats,
+
         currentBeat,
         isPlaying,
         elapsedSec,
@@ -435,6 +567,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }}
     >
       {children}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={closeAuthModal}
+        defaultMode={authModalMode}
+      />
     </AppContext.Provider>
   );
 };

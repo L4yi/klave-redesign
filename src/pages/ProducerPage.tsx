@@ -3,12 +3,13 @@ import { ArrowLeft, MapPin, Play } from 'lucide-react';
 import { BeatRow } from '../components/beats/BeatRow';
 import { VerifiedBadge } from '../components/common/VerifiedBadge';
 import { useApp } from '../context/AppContext';
-import { BEATS, PRODUCERS } from '../data/catalog';
+import { PRODUCERS } from '../data/catalog';
 import { getProducerPortrait } from '../utils/artwork';
 import { formatCompactNumber, pluralize } from '../utils/format';
 
 export const ProducerPage: React.FC = () => {
   const {
+    beats,
     selectedProducerId,
     navigate,
     followedProducers,
@@ -19,8 +20,8 @@ export const ProducerPage: React.FC = () => {
 
   const producer = PRODUCERS.find((p) => p.id === selectedProducerId) ?? PRODUCERS[0];
   const producerBeats = useMemo(
-    () => BEATS.filter((b) => b.producerId === producer.id),
-    [producer.id]
+    () => beats.filter((b) => b.producerId === producer.id),
+    [producer.id, beats]
   );
   const featured = producerBeats.find((b) => b.id === producer.featuredBeatId) ?? producerBeats[0];
   const following = followedProducers.includes(producer.id);

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { RotateCcw, Search, X } from 'lucide-react';
 import { BeatRow } from '../components/beats/BeatRow';
 import { useApp } from '../context/AppContext';
-import { BEATS, MOOD_OPTIONS } from '../data/catalog';
+import { MOOD_OPTIONS } from '../data/catalog';
 import { Genre, MoodTag } from '../types/klave';
 import { pluralize } from '../utils/format';
 
@@ -10,7 +10,7 @@ const GENRES: Genre[] = ['Afrobeats', 'Trap', 'Drill', 'Boom Bap'];
 const KEYS = ['All', 'Am', 'Bbm', 'Bm', 'Cm', 'C#m', 'Dm', 'Eb', 'Em', 'Fm', 'F#m', 'Gm'];
 
 export const BrowsePage: React.FC = () => {
-  const { searchQuery, setSearchQuery } = useApp();
+  const { searchQuery, setSearchQuery, beats } = useApp();
 
   const [selectedGenre, setSelectedGenre] = useState<'All' | Genre>('All');
   const [selectedMood, setSelectedMood] = useState<'All' | MoodTag>('All');
@@ -20,11 +20,13 @@ export const BrowsePage: React.FC = () => {
 
   const genreCounts = useMemo(() => {
     const map: Record<Genre, number> = { Trap: 0, Drill: 0, Afrobeats: 0, 'Boom Bap': 0 };
-    BEATS.forEach((b) => {
-      map[b.genre] += 1;
+    beats.forEach((b) => {
+      if (map[b.genre] !== undefined) {
+        map[b.genre] += 1;
+      }
     });
     return map;
-  }, []);
+  }, [beats]);
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -37,7 +39,7 @@ export const BrowsePage: React.FC = () => {
 
   const results = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const list = BEATS.filter((beat) => {
+    const list = beats.filter((beat) => {
       if (selectedGenre !== 'All' && beat.genre !== selectedGenre) return false;
       if (selectedMood !== 'All' && !beat.moods.includes(selectedMood)) return false;
       if (selectedKey !== 'All' && beat.musicalKey !== selectedKey) return false;

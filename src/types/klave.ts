@@ -17,6 +17,19 @@ export type CurrencyCode = 'USD' | 'NGN';
 
 export type UserRole = 'guest' | 'artist' | 'producer';
 
+export interface UserProfile {
+  uid: string;
+  email?: string | null;
+  displayName?: string | null;
+  photoURL?: string | null;
+  role: 'producer' | 'artist';
+  tier: 'free' | 'pro15' | 'pro7' | 'pro25';
+  admin?: boolean;
+  referredBy?: string | null;
+  referralCount?: number;
+  referralEarnings?: number;
+}
+
 export type AppView = 'discover' | 'browse' | 'producers' | 'producer' | 'studio' | 'profile';
 
 export interface LicenseTier {
@@ -73,6 +86,9 @@ export interface Beat {
   palette: [string, string, string];
   waveform: number[];
   licenses: Record<LicenseTierId, LicenseTier>;
+  audioUrl?: string;
+  previewUrl?: string;
+  soldExclusive?: boolean;
 }
 
 export interface CuratedPlaylist {
