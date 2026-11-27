@@ -1,25 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   AudioLines,
   Bookmark,
-  CheckCircle2,
   Download,
-  Landmark,
   LogOut,
   UserCheck,
   Loader2,
 } from 'lucide-react';
 import { BeatRow } from '../components/beats/BeatRow';
 import { useApp } from '../context/AppContext';
-import { NIGERIAN_BANKS } from '../data/catalog';
 import { formatPrice } from '../utils/format';
-import {
-  listBanks,
-  resolveBankAccount,
-  saveBankAccount,
-  getFullAudioUrl,
-  BankItem,
-} from '../lib/api';
+import { getFullAudioUrl } from '../lib/api';
 
 export const ProfilePage: React.FC = () => {
   const {
@@ -47,76 +38,9 @@ export const ProfilePage: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'licenses' | 'saved' | 'settings'>('licenses');
-
-  // Banks State
-  const [bankList, setBankList] = useState<BankItem[]>([]);
-  const [selectedBankCode, setSelectedBankCode] = useState('058'); // Default GTBank
-  const [accountNum, setAccountNum] = useState('');
-  const [resolvedAccountName, setResolvedAccountName] = useState<string | null>(null);
-  const [bankResolving, setBankResolving] = useState(false);
-  const [bankSaving, setBankSaving] = useState(false);
-  const [bankSaved, setBankSaved] = useState(false);
-
-  // Download loading state
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Load banks from backend
-    listBanks()
-      .then((banks) => {
-        if (banks && banks.length > 0) {
-          setBankList(banks);
-          setSelectedBankCode(banks[0].code);
-        } else {
-          setBankList(NIGERIAN_BANKS.map((name, i) => ({ name, code: String(i).padStart(3, '0') })));
-        }
-      })
-      .catch(() => {
-        setBankList(NIGERIAN_BANKS.map((name, i) => ({ name, code: String(i).padStart(3, '0') })));
-      });
-  }, []);
-
   const savedBeats = beats.filter((b) => savedBeatIds.includes(b.id));
-
-  const handleResolveBank = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanAcc = accountNum.trim();
-    if (!/^\d{10}$/.test(cleanAcc)) {
-      showToast('Enter a valid 10-digit Nigerian NUBAN account number.');
-      return;
-    }
-
-    try {
-      setBankResolving(true);
-      const res = await resolveBankAccount(cleanAcc, selectedBankCode);
-      setResolvedAccountName(res.accountName);
-      showToast(`Account resolved: ${res.accountName}`, 'info');
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      showToast(e.message || 'Could not verify that account', 'info');
-      setResolvedAccountName(null);
-    } finally {
-      setBankResolving(false);
-    }
-  };
-
-  const handleSaveBank = async () => {
-    if (!accountNum || !resolvedAccountName) return;
-    const currentBank = bankList.find((b) => b.code === selectedBankCode);
-    const bankName = currentBank ? currentBank.name : 'Nigerian Bank';
-
-    try {
-      setBankSaving(true);
-      await saveBankAccount(accountNum, selectedBankCode, bankName);
-      setBankSaved(true);
-      showToast(`Payout details saved for ${resolvedAccountName}`, 'success');
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      showToast(e.message || 'Failed to save bank account', 'info');
-    } finally {
-      setBankSaving(false);
-    }
-  };
 
   const handleDownloadFullAudio = async (beatId: string, beatTitle: string) => {
     try {
@@ -151,7 +75,7 @@ export const ProfilePage: React.FC = () => {
           </div>
           <h1 className="font-display text-xl font-extrabold">Sign in to KLAVE</h1>
           <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            Access purchased uncompressed stems, saved beats, and Nigerian bank referral payouts.
+            Access purchased uncompressed stems, saved beats, and producer studio tools.
           </p>
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -243,7 +167,7 @@ export const ProfilePage: React.FC = () => {
         {[
           { id: 'licenses', label: `Purchased Licenses (${purchasedLicenses.length})` },
           { id: 'saved', label: `Saved Beats (${savedBeats.length})` },
-          { id: 'settings', label: 'Settings & Bank Payout' },
+          { id: 'settings', label: 'Preferences' },
         ].map((tab) => {
           const active = activeTab === tab.id;
           return (
@@ -333,10 +257,15 @@ export const ProfilePage: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        <div className="grid gap-10 md:grid-cols-2">
-          {/* Display & System Preferences */}
-          <div className="space-y-2">
+        <div className="max-w-xl space-y-6">
+          <div
+            className="rounded-xl border p-5 space-y-2"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
+          >
             <h2 className="font-display text-base font-bold">Display Preferences</h2>
+            <p className="text-xs pb-2" style={{ color: 'var(--text-secondary)' }}>
+              Customize your storefront interface and currency display.
+            </p>
             {[
               {
                 label: 'Light Mode',
@@ -365,7 +294,7 @@ export const ProfilePage: React.FC = () => {
             ].map((item) => (
               <label
                 key={item.label}
-                className="flex cursor-pointer items-center justify-between border-b py-3"
+                className="flex cursor-pointer items-center justify-between border-b py-3 last:border-b-0"
                 style={{ borderColor: 'var(--border-subtle)' }}
               >
                 <div>
@@ -382,109 +311,6 @@ export const ProfilePage: React.FC = () => {
                 />
               </label>
             ))}
-          </div>
-
-          {/* Nigerian Bank Details for Referral & Producer Payouts */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Landmark className="h-4 w-4" style={{ color: 'var(--accent-ice)' }} />
-              <h2 className="font-display text-base font-bold">Referral & Producer Payout (NGN)</h2>
-            </div>
-            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Connected to Paystack Transfer API. Payouts are made directly to your verified Nigerian bank account.
-            </p>
-
-            <form onSubmit={handleResolveBank} className="space-y-3.5">
-              <div>
-                <label className="block font-mono-tech text-[11px] uppercase" style={{ color: 'var(--text-muted)' }}>
-                  Nigerian Bank
-                </label>
-                <select
-                  value={selectedBankCode}
-                  onChange={(e) => {
-                    setSelectedBankCode(e.target.value);
-                    setResolvedAccountName(null);
-                    setBankSaved(false);
-                  }}
-                  className="mt-1.5 h-10 w-full rounded-md border px-3 text-xs font-semibold outline-none"
-                  style={{
-                    backgroundColor: 'var(--bg-surface)',
-                    borderColor: 'var(--border-subtle)',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  {bankList.map((b) => (
-                    <option key={b.code} value={b.code}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-mono-tech text-[11px] uppercase" style={{ color: 'var(--text-muted)' }}>
-                  10-Digit NUBAN Account Number
-                </label>
-                <div className="mt-1.5 flex gap-2">
-                  <input
-                    type="text"
-                    maxLength={10}
-                    value={accountNum}
-                    onChange={(e) => {
-                      setAccountNum(e.target.value.replace(/\D/g, ''));
-                      setResolvedAccountName(null);
-                      setBankSaved(false);
-                    }}
-                    placeholder="0123456789"
-                    className="h-10 flex-1 rounded-md border px-3 font-mono-tech text-sm outline-none"
-                    style={{
-                      backgroundColor: 'var(--bg-surface)',
-                      borderColor: 'var(--border-subtle)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                  <button
-                    type="submit"
-                    disabled={bankResolving || accountNum.length !== 10}
-                    className="cursor-pointer rounded-md border px-4 font-mono-tech text-xs font-semibold transition hover:border-blue-500 disabled:opacity-50"
-                    style={{
-                      backgroundColor: 'var(--bg-elevated)',
-                      borderColor: 'var(--border-strong)',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    {bankResolving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Verify'}
-                  </button>
-                </div>
-              </div>
-
-              {resolvedAccountName && (
-                <div
-                  className="rounded-md border p-3.5 space-y-2"
-                  style={{ backgroundColor: 'var(--accent-soft)', borderColor: 'var(--border-strong)' }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-mono-tech text-[10px] uppercase font-bold" style={{ color: 'var(--accent-ice)' }}>
-                        Resolved Account Holder
-                      </span>
-                      <div className="text-sm font-bold text-white">{resolvedAccountName}</div>
-                    </div>
-                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={bankSaving || bankSaved}
-                    onClick={handleSaveBank}
-                    className="w-full cursor-pointer rounded-md py-2 font-mono-tech text-xs font-bold text-white transition disabled:opacity-60"
-                    style={{ backgroundColor: 'var(--accent-primary)' }}
-                  >
-                    {bankSaving ? 'Saving to encrypted storage...' : bankSaved ? 'Saved to Private Finance' : 'Save Account'}
-                  </button>
-                </div>
-              )}
-            </form>
           </div>
         </div>
       )}
